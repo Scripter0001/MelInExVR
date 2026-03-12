@@ -16,10 +16,13 @@ using UnityEngine;
 
 namespace MelInEx;
 
+// This should NEVER use any particular class from either loader
 public static class MelInExShared
 {
     public const string MelonLoaderURL = "https://github.com/LavaGang/MelonLoader/releases/latest/download/MelonLoader.x64.zip";
     public const string BepInExURL = "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.5/BepInEx_win_x64_5.4.23.5.zip";
+    public static readonly string MlPath = Path.GetFullPath("./");
+    public static Assembly ml;
     
     public static void InstallModLoader(string URL, string folderToLoad)
     {
@@ -57,102 +60,72 @@ public class BelInEx : BaseUnityPlugin
     private void Awake()
     {
         MelInExShared.InstallModLoader(MelInExShared.MelonLoaderURL, "MelonLoader");
-        string mlPath = Path.GetFullPath("./");
-        // Load Dependencies
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/MonoMod.ILHelpers.dll"));
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/MonoMod.Backports.dll"));
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/bHapticsLib.dll"));
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/AssetRipper.Primitives.dll"));
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/Tomlet.dll"));
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/AssetsTools.NET.dll"));
-        // Load ML
-        Assembly.LoadFrom(Path.Combine(mlPath, "MelonLoader/net35/MelonLoader.dll"));
-        // Setup Config
-        Type loaderConfig = AccessTools.TypeByName("LoaderConfig");
-        Type coreConfig = AccessTools.TypeByName("CoreConfig");
-        object CurrentConfig = AccessTools.Property(loaderConfig, "Current").GetValue(null);
-        object CurrentLoaderConfig = AccessTools.Property(loaderConfig, "Loader").GetValue(CurrentConfig);
-        AccessTools.Property(coreConfig, "BaseDirectory").SetValue(CurrentLoaderConfig, mlPath);
-        // Setup Mods Directories
-        Type melonHandler = AccessTools.TypeByName("MelonHandler");
-        AccessTools.Method(melonHandler, "Setup").Invoke(null, null);
-        // create dummy loggers
-        Type bootstrapInterop = AccessTools.TypeByName("BootstrapInterop");
+        
+        // Load dependencies
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/MonoMod.ILHelpers.dll"));
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/MonoMod.Backports.dll"));
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/bHapticsLib.dll"));
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/AssetRipper.Primitives.dll"));
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/Tomlet.dll"));
+        Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/AssetsTools.NET.dll"));
+        // Load ML (assembly is used EVERYWHERE in the shims so it's assigned to the shared class)
+        MelInExShared.ml = Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/MelonLoader.dll"));
+        
+        // initialize native shims
         Type bootstrapLibrary = AccessTools.TypeByName("BootstrapLibrary");
+        
+        // get delegate types
         Type logError = AccessTools.TypeByName("LogErrorFn");
         Type logMelonInfo = AccessTools.TypeByName("LogMelonInfoFn");
         Type logMsg = AccessTools.TypeByName("LogMsgFn");
-        object library = Activator.CreateInstance(bootstrapLibrary);
-        AccessTools.Property(bootstrapInterop, "Library").SetValue(null, library);
+        Type loaderConfig = AccessTools.TypeByName("GetLoaderConfigFn");
+        Type installHooks = AccessTools.TypeByName("ActionFn");
+        Type loadMono = AccessTools.TypeByName("PtrRetFn");
 
+        // Create forwarders for these delegates
+        Type nativeFunctions = typeof(MelonLoaderNativeShims);
+        
         Delegate logErrorDelegate =
-            DelegateHandler.CreateForwarder(typeof(BepInExMelonLogger), logError, "LogError");
-        
+            DelegateHandler.CreateForwarder(nativeFunctions, logError, "LogError");
         Delegate logMsgDelegate =
-            DelegateHandler.CreateForwarder(typeof(BepInExMelonLogger), logMsg, "LogMsg");
-        
+            DelegateHandler.CreateForwarder(nativeFunctions, logMsg, "LogMsg");
         Delegate logMelonDelegate =
-            DelegateHandler.CreateForwarder(typeof(BepInExMelonLogger), logMelonInfo, "LogMelonInfo");
+            DelegateHandler.CreateForwarder(nativeFunctions, logMelonInfo, "LogMelonInfo");
+        Delegate loaderConfigDelegate =
+            DelegateHandler.CreateForwarder(nativeFunctions, loaderConfig, "GetLoaderConfig");
+        Delegate installHooksDelegate =
+            DelegateHandler.CreateForwarder(nativeFunctions, installHooks, "MonoInstallHooks");
+        Delegate loadMonoDelegate =
+            DelegateHandler.CreateForwarder(nativeFunctions, loadMono, "MonoGetRuntimeHandle");
         
+        // create and assign new library object
+        object library = Activator.CreateInstance(bootstrapLibrary);
+        
+        AccessTools.Property(AccessTools.TypeByName("BootstrapInterop"), "Library").SetValue(null, library);
+
+        // assign shims to library
         AccessTools.Property(bootstrapLibrary, "LogError").SetValue(library, logErrorDelegate);
         AccessTools.Property(bootstrapLibrary, "LogMelonInfo").SetValue(library, logMelonDelegate);
         AccessTools.Property(bootstrapLibrary, "LogMsg").SetValue(library, logMsgDelegate);
-        // recreate core setup since not everything is here.
-        // Misc initialization
-        AccessTools.Method(AccessTools.TypeByName("MelonLaunchOptions"), "Load").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("MelonUtils"), "SetupWineCheck").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("MelonLoader.Pastel.ConsoleExtensions"), "Disable").Invoke(null, null); // Usually you'd check if environment is wine before running this but BIE doesn't support Pastel anyways.
-        AccessTools.Method(AccessTools.TypeByName("UnhandledException"), "Install").Invoke(null, [AppDomain.CurrentDomain]);
-        AccessTools.Method(AccessTools.TypeByName("ServerCertificateValidation"), "Install").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("LemonAssertMapping"), "Setup").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("HarmonyLogger"), "Setup").Invoke(null, null);
-        AccessTools.Field(AccessTools.TypeByName("MelonLoader.Core"), "HarmonyInstance").SetValue(null, new HarmonyLib.Harmony("MelonLoader"));
-        AccessTools.Method(AccessTools.TypeByName("MelonUtils"), "Setup").Invoke(null, [AppDomain.CurrentDomain]);
-        // TODO: Hijack BepInEx's assembly events and execute harmony's MelonAssemblyResolver.OnAssemblyLoad
-        // Skipping SetDefaultConsoleTitleWithGameName since BIE already did this
-        // Eh, I'm sure we don't need MonoLibrary
-        AccessTools.Method(AccessTools.TypeByName("DetourContextDisposeFix"), "Install").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("ForcedCultureInfo"), "Install").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("InstancePatchFix"), "Install").Invoke(null, null);
-        // This is a windows only mod
-        AccessTools.Method(AccessTools.TypeByName("ProcessFix"), "Install").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("PatchShield"), "Install").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("MelonPreferences"), "Load").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("MelonCompatibilityLayer"), "LoadModules").Invoke(null, null);
-        // Load plugins n' shit
-        Type melonFolderHandler = AccessTools.TypeByName("MelonLoader.Melons.MelonFolderHandler");
-        Type melonFolderHandlerScanType = AccessTools.TypeByName("MelonLoader.Melons.MelonFolderHandler+ScanType");
-        AccessTools.Method(melonFolderHandler, "ScanForFolders").Invoke(null, null);
-        MethodInfo loadMelons = AccessTools.GetDeclaredMethods(melonFolderHandler).First(x => x.Name == "LoadMelons" && x.ReturnType == typeof(void));
-        loadMelons.Invoke(null, [Enum.Parse(melonFolderHandlerScanType, "UserLibs")]);
-        loadMelons.Invoke(null, [Enum.Parse(melonFolderHandlerScanType, "Plugins")]);
-        Type melonEvent = AccessTools.TypeByName("MelonEvent");
-        Type melonEvents = AccessTools.TypeByName("MelonEvents");
-        MethodInfo melonEventInvoke = AccessTools.Method(melonEvent, "Invoke");
-        // Call events
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "MelonHarmonyEarlyInit").GetValue(null), null);
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "OnPreInitialization").GetValue(null), null);
+        AccessTools.Property(bootstrapLibrary, "GetLoaderConfig").SetValue(library, loaderConfigDelegate);
+        AccessTools.Property(bootstrapLibrary, "MonoInstallHooks").SetValue(library, installHooksDelegate);
+        AccessTools.Property(bootstrapLibrary, "MonoGetRuntimeHandle").SetValue(library, loadMonoDelegate);
+
+        // initialize MelonLoader
+        Type core = AccessTools.TypeByName("MelonLoader.Core");
         
-        // We're already in the scene, so do the Start functionality
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "OnApplicationEarlyStart").GetValue(null), null);
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "OnPreModsLoaded").GetValue(null), null);
-        loadMelons.Invoke(null, [Enum.Parse(melonFolderHandlerScanType, "Mods")]);
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "OnPreSupportModule").GetValue(null), null);
-        AccessTools.Method(AccessTools.TypeByName("SupportModule"), "Setup").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("MelonLoader.Core"), "AddUnityDebugLog").Invoke(null, null);
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "MelonHarmonyInit").GetValue(null), null);
-        melonEventInvoke.Invoke(AccessTools.Field(melonEvents, "OnApplicationStart").GetValue(null), null);
+        AccessTools.Method(core, "Initialize").Invoke(null, null);
+        AccessTools.Method(core, "Start").Invoke(null, null);
     }
 }
 
 // MelonLoader
 public class MelOnEx : MelonPlugin
 {
-    private Assembly biePreloader;
-    
     public override void OnApplicationEarlyStart()
     {
         MelInExShared.InstallModLoader(MelInExShared.BepInExURL, "BepInEx");
+        
         string gameName = MelInExShared.GetProductName();
         Environment.SetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH", Path.GetFullPath("./BepInEx/core/BepInEx.Preloader.dll"));
         Environment.SetEnvironmentVariable("DOORSTOP_MANAGED_FOLDER_DIR", Path.GetFullPath("./" + gameName + "_Data/Managed"));
@@ -162,20 +135,13 @@ public class MelOnEx : MelonPlugin
         string biePath = Path.GetFullPath("./BepInEx");
         Assembly.LoadFrom(Path.Combine(biePath, "core/0Harmony.dll"));
         Assembly.LoadFrom(Path.Combine(biePath, "core/HarmonyXInterop.dll"));
-        biePreloader = Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Preloader.dll")); // not a dep but needed to execute some functions that are supposed to run before bepinex inits
-        Console.WriteLine(biePreloader);
         // Load BepInEx
+        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Preloader.dll"));
         Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.dll"));
-        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Harmony.dll"));
-        AccessTools.Method(AccessTools.TypeByName("EnvVars"), "LoadVars").Invoke(null, null);
-        AccessTools.Method(AccessTools.TypeByName("Paths"), "SetExecutablePath").Invoke(null,
-        [
-            Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"),
-            Path.Combine(Environment.GetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH"), "../", "../"),
-            Environment.GetEnvironmentVariable("DOORSTOP_MANAGED_FOLDER_DIR"),
-            new[] {Environment.GetEnvironmentVariable("DOORSTOP_DLL_SEARCH_DIRS")}
-        ]);
-        AccessTools.Method(AccessTools.TypeByName("Preloader"), "Run").Invoke(null, null);
+        // Hack fix that I REALLY shouldn't do, but it works so whatever
+        AccessTools.Field(AccessTools.TypeByName("MonoMod.Utils.PlatformHelper"), "_currentLocked").SetValue(null, false);
+        AccessTools.Method(AccessTools.TypeByName("Doorstop.Entrypoint"), "Start").Invoke(null, null);
+        // We're already past the chainloader initialization stage so manually call the chainloader
         AccessTools.Method(AccessTools.TypeByName("Chainloader"), "Initialize").Invoke(null, [Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"), false, null]);
         AccessTools.Method(AccessTools.TypeByName("Chainloader"), "Start").Invoke(null, null);
     }

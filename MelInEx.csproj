@@ -13,6 +13,9 @@
       <Reference Include="BepInEx">
         <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/BepInEx/core/BepInEx.dll</HintPath>
       </Reference>
+      <Reference Include="BepInEx.Preloader">
+        <HintPath>..\..\.local\share\Steam\steamapps\common\Gorilla Tag\BepInEx\core\BepInEx.Preloader.dll</HintPath>
+      </Reference>
       <Reference Include="MelonLoader">
         <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/MelonLoader/net35/MelonLoader.dll</HintPath>
       </Reference>
@@ -28,7 +31,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Interop/MelonBepInterop/" />
+      <Folder Include="Interop\MelonBepInterop\" />
     </ItemGroup>
 
 </Project>
