@@ -1,5 +1,5 @@
 # MelInEx
-A mod to load mods interchangably between MelonLoader and BepInEx
+A mod to load BepInEx in MelonLoader and vice versa
 
 Currently loads mods, just needs polish, a better installation process, and patchers.
 
