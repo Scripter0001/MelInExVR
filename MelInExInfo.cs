@@ -1,10 +1,9 @@
-namespace MelInEx
+namespace MelInEx;
+
+public class MelInExInfo
 {
-    public class MelInExInfo
-    {
-        public const string Name = "MelInEx";
-        public const string Version = "2.0.0";
-        public const string Author = "Lofiat";
-        public const string GUID = Author + "." + Name;
-    }
+    public const string Name = "MelInEx";
+    public const string Version = "3.0.1";
+    public const string Author = "Lofiat";
+    public const string GUID = Author + "." + Name;
 }

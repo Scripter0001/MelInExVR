@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Net;
 using System.Reflection;
 using BepInEx;
@@ -12,6 +11,7 @@ using MelonLoader;
 using UnityEngine;
 
 [assembly: MelonInfo(typeof(MelOnEx), MelInExInfo.Name, MelInExInfo.Version, MelInExInfo.Author)]
+[assembly: HarmonyDontPatchAll]
 [assembly: MelonOptionalDependencies("BepInEx")]
 
 namespace MelInEx;
@@ -135,14 +135,40 @@ public class MelOnEx : MelonPlugin
         string biePath = Path.GetFullPath("./BepInEx");
         Assembly.LoadFrom(Path.Combine(biePath, "core/0Harmony.dll"));
         Assembly.LoadFrom(Path.Combine(biePath, "core/HarmonyXInterop.dll"));
+        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Preloader.dll")); // not a dep but needed to execute some functions that are supposed to run before bepinex inits
         // Load BepInEx
-        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Preloader.dll"));
-        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.dll"));
-        // Hack fix that I REALLY shouldn't do, but it works so whatever
-        AccessTools.Field(AccessTools.TypeByName("MonoMod.Utils.PlatformHelper"), "_currentLocked").SetValue(null, false);
-        AccessTools.Method(AccessTools.TypeByName("Doorstop.Entrypoint"), "Start").Invoke(null, null);
-        // We're already past the chainloader initialization stage so manually call the chainloader
-        AccessTools.Method(AccessTools.TypeByName("Chainloader"), "Initialize").Invoke(null, [Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"), false, null]);
+        Assembly bie = Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.dll"));
+        Assembly.LoadFrom(Path.Combine(biePath, "core/BepInEx.Harmony.dll"));
+        HarmonyInstance.PatchAll(GetType().Assembly);
+        AccessTools.Method(AccessTools.TypeByName("EnvVars"), "LoadVars").Invoke(null, null);
+        AccessTools.Method(AccessTools.TypeByName("Paths"), "SetExecutablePath").Invoke(null,
+        [
+            Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"),
+            Path.Combine(Environment.GetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH"), "../", "../"),
+            Environment.GetEnvironmentVariable("DOORSTOP_MANAGED_FOLDER_DIR"),
+            new[] {Environment.GetEnvironmentVariable("DOORSTOP_DLL_SEARCH_DIRS")}
+        ]);
+        AccessTools.Method(AccessTools.TypeByName("Preloader"), "InitializeHarmony").Invoke(null, null);
+        //AccessTools.Method(AccessTools.TypeByName("Preloader"), "Run").Invoke(null, null);
+        AccessTools.Method(AccessTools.TypeByName("BepInEx.Preloader.Patching.AssemblyPatcher"), "AddPatchersFromDirectory").Invoke(null,
+            [AccessTools.Property(AccessTools.TypeByName("Paths"), "PatcherPluginPath").GetValue(null)]);
+        AccessTools.Method(AccessTools.TypeByName("BepInEx.Preloader.Patching.AssemblyPatcher"), "PatchAndLoad").Invoke(null,
+            [AccessTools.Property(AccessTools.TypeByName("Paths"), "DllSearchPaths").GetValue(null)]);
+        AccessTools.Method(AccessTools.TypeByName("BepInEx.Preloader.Patching.AssemblyPatcher"), "DisposePatchers").Invoke(null, null);
+    }
+
+    public override void OnPreSupportModule()
+    {
+        try
+        {
+            // need to initialize but I'm really tired of manually going down the chain so I'm try-catching it for now.
+            AccessTools.Method(AccessTools.TypeByName("Chainloader"), "Initialize").Invoke(null, [Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"), false, null]);
+        }
+        catch
+        {
+            // fuckoff
+        }
+        
         AccessTools.Method(AccessTools.TypeByName("Chainloader"), "Start").Invoke(null, null);
     }
 }
