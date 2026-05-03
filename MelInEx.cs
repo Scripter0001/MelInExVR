@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Reflection;
+using System.Threading;
 using BepInEx;
 using HarmonyLib;
 using MelInEx;
@@ -26,7 +27,6 @@ public static class MelInExShared
     
     public static void InstallModLoader(string URL, string folderToLoad)
     {
-        new Material(new Material(Shader.Find("UI/Default")));
         // Don't Install if it's already installed
         if (Directory.Exists("./" + folderToLoad))
             return;
@@ -59,7 +59,17 @@ public class BelInEx : BaseUnityPlugin
 {
     private void Awake()
     {
-        MelInExShared.InstallModLoader(MelInExShared.MelonLoaderURL, "MelonLoader");
+        // Install on background thread to prevent VR freeze
+        Thread installThread = new Thread(() =>
+        {
+            MelInExShared.InstallModLoader(MelInExShared.MelonLoaderURL, "MelonLoader");
+        })
+        {
+            IsBackground = true,
+            Name = "MelInEx-Installer"
+        };
+        installThread.Start();
+        installThread.Join();
         
         // Load dependencies
         Assembly.LoadFrom(Path.Combine(MelInExShared.MlPath, "MelonLoader/net35/MonoMod.ILHelpers.dll"));
@@ -124,7 +134,17 @@ public class MelOnEx : MelonPlugin
 {
     public override void OnApplicationEarlyStart()
     {
-        MelInExShared.InstallModLoader(MelInExShared.BepInExURL, "BepInEx");
+        // Install on background thread to prevent VR freeze
+        Thread installThread = new Thread(() =>
+        {
+            MelInExShared.InstallModLoader(MelInExShared.BepInExURL, "BepInEx");
+        })
+        {
+            IsBackground = true,
+            Name = "MelInEx-Installer"
+        };
+        installThread.Start();
+        installThread.Join();
         
         string gameName = MelInExShared.GetProductName();
         Environment.SetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH", Path.GetFullPath("./BepInEx/core/BepInEx.Preloader.dll"));
@@ -146,7 +166,7 @@ public class MelOnEx : MelonPlugin
             Environment.GetEnvironmentVariable("DOORSTOP_PROCESS_PATH"),
             Path.Combine(Environment.GetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH"), "../", "../"),
             Environment.GetEnvironmentVariable("DOORSTOP_MANAGED_FOLDER_DIR"),
-            new[] {Environment.GetEnvironmentVariable("DOORSTOP_DLL_SEARCH_DIRS")}
+            new[]{Environment.GetEnvironmentVariable("DOORSTOP_DLL_SEARCH_DIRS")}
         ]);
         AccessTools.Method(AccessTools.TypeByName("Preloader"), "InitializeHarmony").Invoke(null, null);
         //AccessTools.Method(AccessTools.TypeByName("Preloader"), "Run").Invoke(null, null);
