@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
@@ -8,25 +8,25 @@
 
     <ItemGroup>
       <Reference Include="0Harmony">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/MelonLoader/net35/0Harmony.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\MelonLoader\net35\0Harmony.dll</HintPath>
       </Reference>
       <Reference Include="BepInEx">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/BepInEx/core/BepInEx.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\BepInEx\core\BepInEx.dll</HintPath>
       </Reference>
       <Reference Include="BepInEx.Preloader">
-        <HintPath>..\..\.local\share\Steam\steamapps\common\Gorilla Tag\BepInEx\core\BepInEx.Preloader.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\BepInEx\core\BepInEx.Preloader.dll</HintPath>
       </Reference>
       <Reference Include="MelonLoader">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/MelonLoader/net35/MelonLoader.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\MelonLoader\net35\MelonLoader.dll</HintPath>
       </Reference>
       <Reference Include="Mono.Cecil">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/MelonLoader/net35/Mono.Cecil.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\MelonLoader\net35\Mono.Cecil.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\Gorilla Tag_Data\Managed\UnityEngine.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine.CoreModule">
-        <HintPath>../../.local/share/Steam/steamapps/common/Gorilla Tag/Gorilla Tag_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+        <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag\Gorilla Tag_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       </Reference>
     </ItemGroup>
 
